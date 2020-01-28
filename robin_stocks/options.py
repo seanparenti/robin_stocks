@@ -447,7 +447,7 @@ def get_option_instrument_data(symbol,expirationDate,strike,optionType,info=None
 
     return(helper.filter(data,info))
 
-def get_option_historicals(symbol,expirationDate,strike,optionType,span='week'):
+def get_option_historicals(symbol,expirationDate,strike,optionType,span='week',state='expired',tradable='untradable'):
     """Returns the data that is used to make the graphs.
 
     :param symbol: The ticker of the stock.
@@ -485,9 +485,41 @@ def get_option_historicals(symbol,expirationDate,strike,optionType,span='week'):
     else:
         interval = 'week'
 
-    optionID = helper.id_for_option(symbol,expirationDate,strike,optionType)
+    optionID = helper.id_for_option(symbol,expirationDate,strike,optionType,state,tradable)
 
     url = urls.option_historicals(optionID)
+    payload = { 'span' : span,
+                'interval' : interval}
+    data = helper.request_get(url,'regular',payload)
+
+    return(data)
+
+def get_option_historicals_by_chain_id(chain_id,span='week'):
+    """Returns the data that is used to make the graphs.
+
+    :param chain_id: The id for the option_chain (if not available use original option_historicals)
+    :type chain_id: str
+    :param span: Sets the range of the data to be either 'day', 'week', 'year', or '5year'. Default is 'week'.
+    :type span: Optional[str]
+    :returns: Returns a list that contains a list for each symbol. \
+    Each list contains a dictionary where each dictionary is for a different time.
+
+    """
+    span_check = ['day','week','year','5year']
+    if span not in span_check:
+        print('ERROR: Span must be "day","week","year",or "5year"')
+        return([None])
+
+    if span == 'day':
+        interval = '5minute'
+    elif span == 'week':
+        interval = '10minute'
+    elif span == 'year':
+        interval = 'day'
+    else:
+        interval = 'week'
+
+    url = urls.option_historicals(chain_id)
     payload = { 'span' : span,
                 'interval' : interval}
     data = helper.request_get(url,'regular',payload)

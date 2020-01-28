@@ -11,33 +11,42 @@ from robin_stocks.globals import SESSION, LOGGED_IN
 from functools import wraps
 import requests
 
+
 def set_login_state(logged_in):
     """Sets the login state"""
     global LOGGED_IN
     LOGGED_IN = logged_in
 
+
 def login_required(func):
     """A decorator for indicating which methods require the user to be logged
        in."""
+
     @wraps(func)
     def login_wrapper(*args, **kwargs):
-      global LOGGED_IN
-      if not LOGGED_IN:
-          raise Exception('{} can only be called when logged in'.format(
-              func.__name__))
-      return(func(*args, **kwargs))
-    return(login_wrapper)
+        global LOGGED_IN
+        if not LOGGED_IN:
+            raise Exception(
+                "{} can only be called when logged in".format(func.__name__)
+            )
+        return func(*args, **kwargs)
+
+    return login_wrapper
+
 
 def convert_none_to_string(func):
     """A decorator for converting a None Type into a blank string"""
+
     @wraps(func)
     def string_wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         if result:
-            return(result)
+            return result
         else:
-            return("")
-    return(string_wrapper)
+            return ""
+
+    return string_wrapper
+
 
 def id_for_stock(symbol):
     """Takes a stock ticker and returns the instrument id associated with the stock.
@@ -51,13 +60,14 @@ def id_for_stock(symbol):
         symbol = symbol.upper().strip()
     except AttributeError as message:
         print(message)
-        return(None)
+        return None
 
-    url = 'https://api.robinhood.com/instruments/'
-    payload = { 'symbol' : symbol}
-    data = request_get(url,'indexzero',payload)
+    url = "https://api.robinhood.com/instruments/"
+    payload = {"symbol": symbol}
+    data = request_get(url, "indexzero", payload)
 
-    return(filter(data,'id'))
+    return filter(data, "id")
+
 
 def id_for_chain(symbol):
     """Takes a stock ticker and returns the chain id associated with a stocks option.
@@ -71,14 +81,15 @@ def id_for_chain(symbol):
         symbol = symbol.upper().strip()
     except AttributeError as message:
         print(message)
-        return(None)
+        return None
 
-    url = 'https://api.robinhood.com/instruments/'
+    url = "https://api.robinhood.com/instruments/"
 
-    payload = { 'symbol' : symbol}
-    data = request_get(url,'indexzero',payload)
+    payload = {"symbol": symbol}
+    data = request_get(url, "indexzero", payload)
 
-    return(data['tradable_chain_id'])
+    return data["tradable_chain_id"]
+
 
 def id_for_group(symbol):
     """Takes a stock ticker and returns the id associated with the group.
@@ -92,13 +103,14 @@ def id_for_group(symbol):
         symbol = symbol.upper().strip()
     except AttributeError as message:
         print(message)
-        return(None)
+        return None
 
-    url = 'https://api.robinhood.com/options/chains/'+id_for_chain(symbol)+'/'
+    url = "https://api.robinhood.com/options/chains/" + id_for_chain(symbol) + "/"
     data = request_get(url)
-    return(data['underlying_instruments'][0]['id'])
+    return data["underlying_instruments"][0]["id"]
 
-def id_for_option(symbol,expirationDate,strike,optionType='both'):
+
+def id_for_option(symbol, expirationDate, strike, optionType="both",state="active",tradable="tradable"):
     """Returns the id associated with a specific option order.
 
     :param symbol: The symbol to get the id for.
@@ -112,20 +124,33 @@ def id_for_option(symbol,expirationDate,strike,optionType='both'):
     :returns:  A string that represents the stocks option id.
 
     """
+
     symbol = symbol.upper()
-    payload = { 'chain_id' : id_for_chain(symbol),
-                'state' : 'active',
-                'tradability' : 'tradable',
-                'type' : optionType}
-    url = 'https://api.robinhood.com/options/instruments/'
-    data = request_get(url,'pagination',payload)
 
-    listOfOptions = [item for item in data if item["expiration_date"] == expirationDate and float(item["strike_price"])== float(strike)]
-    if (len(listOfOptions) == 0):
-        print('Getting the option ID failed. Perhaps the expiration date is wrong format, or the strike price is wrong.')
-        return(None)
+    payload = {
+        "chain_id": id_for_chain(symbol),
+        "state": state,
+        "tradability": tradable,
+        "type": optionType,
+    }
 
-    return(listOfOptions[0]['id'])
+    url = "https://api.robinhood.com/options/instruments/"
+    data = request_get(url, "pagination", payload)
+
+    listOfOptions = [
+        item
+        for item in data
+        if item["expiration_date"] == expirationDate
+        and float(item["strike_price"]) == float(strike)
+    ]
+    if len(listOfOptions) == 0:
+        print(
+            "Getting the option ID failed. Perhaps the expiration date is wrong format, or the strike price is wrong."
+        )
+        return None
+
+    return listOfOptions[0]["id"]
+
 
 def round_price(price):
     """Takes a price and rounds it to an appropriate decimal place that Robinhood will accept.
@@ -137,15 +162,16 @@ def round_price(price):
     """
     price = float(price)
     if price <= 1e-2:
-        returnPrice = round(price,6)
+        returnPrice = round(price, 6)
     elif price <= 0:
-        returnPrice = round(price,4)
+        returnPrice = round(price, 4)
     else:
-        returnPrice = round(price,2)
+        returnPrice = round(price, 2)
 
     return returnPrice
 
-def filter(data,info):
+
+def filter(data, info):
     """Takes the data and extracts the value for the keyword that matches info.
 
     :param data: The data returned by request_get.
@@ -155,29 +181,30 @@ def filter(data,info):
     :returns:  A list or string with the values that correspond to the info keyword.
 
     """
-    if (data == None):
-        return(data)
-    elif (data == [None]):
-        return([])
-    elif (type(data) == list):
-        if (len(data) == 0):
-            return([])
+    if data == None:
+        return data
+    elif data == [None]:
+        return []
+    elif type(data) == list:
+        if len(data) == 0:
+            return []
         compareDict = data[0]
         noneType = []
-    elif (type(data) == dict):
+    elif type(data) == dict:
         compareDict = data
         noneType = None
 
     if info is not None:
         if info in compareDict and type(data) == list:
-            return([x[info] for x in data])
+            return [x[info] for x in data]
         elif info in compareDict and type(data) == dict:
-            return(data[info])
+            return data[info]
         else:
             print(error_argument_not_key_in_dictionary(info))
-            return(noneType)
+            return noneType
     else:
-        return(data)
+        return data
+
 
 def inputs_to_set(inputSymbols):
     """Takes in the parameters passed to *args and puts them in a set and a list.
@@ -201,14 +228,19 @@ def inputs_to_set(inputSymbols):
 
     if type(inputSymbols) is str:
         add_symbol(inputSymbols)
-    elif type(inputSymbols) is list or type(inputSymbols) is tuple or type(inputSymbols) is set:
+    elif (
+        type(inputSymbols) is list
+        or type(inputSymbols) is tuple
+        or type(inputSymbols) is set
+    ):
         inputSymbols = [comp for comp in inputSymbols if type(comp) is str]
         for item in inputSymbols:
             add_symbol(item)
 
-    return(symbols_list)
+    return symbols_list
 
-def request_document(url,payload=None):
+
+def request_document(url, payload=None):
     """Using a document url, makes a get request and returnes the session data.
 
     :param url: The url to send a get request to.
@@ -217,15 +249,16 @@ def request_document(url,payload=None):
 
     """
     try:
-        res = SESSION.get(url,params=payload)
+        res = SESSION.get(url, params=payload)
         res.raise_for_status()
     except requests.exceptions.HTTPError as message:
         print(message)
-        return(None)
+        return None
 
-    return(res)
+    return res
 
-def request_get(url,dataType='regular',payload=None,jsonify_data=True):
+
+def request_get(url, dataType="regular", payload=None, jsonify_data=True):
     """For a given url and payload, makes a get request and returns the data.
 
     :param url: The url to send a get request to.
@@ -242,64 +275,65 @@ def request_get(url,dataType='regular',payload=None,jsonify_data=True):
     then either '[None]' or 'None' will be returned based on what the dataType parameter was set as.
 
     """
-    if (dataType == 'results' or dataType == 'pagination'):
+    if dataType == "results" or dataType == "pagination":
         data = [None]
     else:
-        data =  None
+        data = None
     res = None
     if jsonify_data:
         try:
-            res = SESSION.get(url,params=payload)
+            res = SESSION.get(url, params=payload)
             res.raise_for_status()
             data = res.json()
-        except (requests.exceptions.HTTPError,AttributeError) as message:
+        except (requests.exceptions.HTTPError, AttributeError) as message:
             print(message)
-            return(data)
+            return data
     else:
-        res = SESSION.get(url,params=payload)
-        return(res)
+        res = SESSION.get(url, params=payload)
+        return res
     # Only continue to filter data if jsonify_data=True, and Session.get returned status code <200>.
-    if (dataType == 'results'):
+    if dataType == "results":
         try:
-            data = data['results']
+            data = data["results"]
         except KeyError as message:
             print("{0} is not a key in the dictionary".format(message))
-            return([None])
-    elif (dataType == 'pagination'):
+            return [None]
+    elif dataType == "pagination":
         counter = 2
         nextData = data
         try:
-            data = data['results']
+            data = data["results"]
         except KeyError as message:
             print("{0} is not a key in the dictionary".format(message))
-            return([None])
+            return [None]
 
-        if nextData['next']:
-            print('Found Additional pages.')
-        while nextData['next']:
+        if nextData["next"]:
+            print("Found Additional pages.")
+        while nextData["next"]:
             try:
-                res = SESSION.get(nextData['next'])
+                res = SESSION.get(nextData["next"])
                 res.raise_for_status()
                 nextData = res.json()
             except:
-                print('Additional pages exist but could not be loaded.')
-                return(data)
-            print('Loading page '+str(counter)+' ...')
+                print("Additional pages exist but could not be loaded.")
+                return data
+            print("Loading page " + str(counter) + " ...")
             counter += 1
-            for item in nextData['results']:
+            for item in nextData["results"]:
                 data.append(item)
-    elif (dataType == 'indexzero'):
+    elif dataType == "indexzero":
         try:
-            data = data['results'][0]
+            data = data["results"][0]
         except KeyError as message:
             print("{0} is not a key in the dictionary".format(message))
-            return(None)
+            return None
         except IndexError as message:
-            return(None)
+            return None
 
-    return(data)
+    return data
 
-def request_post(url,payload=None,timeout=16,json=False,jsonify_data=True):
+
+def request_post(url, payload=None, timeout=16, json=False, jsonify_data=True):
     """For a given url and payload, makes a post request and returns the response. Allows for responses other than 200.
 
     :param url: The url to send a post request to.
@@ -319,9 +353,11 @@ def request_post(url,payload=None,timeout=16,json=False,jsonify_data=True):
     res = None
     try:
         if json:
-            update_session('Content-Type', 'application/json')
+            update_session("Content-Type", "application/json")
             res = SESSION.post(url, json=payload, timeout=timeout)
-            update_session('Content-Type', 'application/x-www-form-urlencoded; charset=utf-8')
+            update_session(
+                "Content-Type", "application/x-www-form-urlencoded; charset=utf-8"
+            )
         else:
             res = SESSION.post(url, data=payload, timeout=timeout)
         data = res.json()
@@ -329,9 +365,10 @@ def request_post(url,payload=None,timeout=16,json=False,jsonify_data=True):
         print("Error in request_post: {0}".format(message))
     # Either return response <200,401,etc.> or the data that is returned from requests.
     if jsonify_data:
-        return(data)
+        return data
     else:
-        return(res)
+        return res
+
 
 def request_delete(url):
     """For a given url and payload, makes a delete request and returns the response.
@@ -348,9 +385,10 @@ def request_delete(url):
         data = None
         print("Error in request_delete: {0}".format(message))
 
-    return(data)
+    return data
 
-def update_session(key,value):
+
+def update_session(key, value):
     """Updates the session header used by the requests library.
 
     :param key: The key value to update or add to session header.
@@ -362,11 +400,18 @@ def update_session(key,value):
     """
     SESSION.headers[key] = value
 
+
 def error_argument_not_key_in_dictionary(keyword):
-    return('Error: The keyword "{0}" is not a key in the dictionary.'.format(keyword))
+    return 'Error: The keyword "{0}" is not a key in the dictionary.'.format(keyword)
+
 
 def error_ticker_does_not_exist(ticker):
-    return('Warning: "{0}" is not a valid stock ticker. It is being ignored'.format(ticker))
+    return 'Warning: "{0}" is not a valid stock ticker. It is being ignored'.format(
+        ticker
+    )
+
 
 def error_must_be_nonzero(keyword):
-    return('Error: The input parameter "{0}" must be an integer larger than zero and non-negative'.format(keyword))
+    return 'Error: The input parameter "{0}" must be an integer larger than zero and non-negative'.format(
+        keyword
+    )
