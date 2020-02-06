@@ -56,7 +56,7 @@ def get_all_open_option_orders(info = None):
     return(helper.filter(data, info))
 
 @helper.login_required
-def get_order_info(orderID):
+def get_order_info(orderID,option=True):
     """Returns the information for a single order.
 
     :param orderID: The ID associated with the order. Can be found using get_all_orders(info=None) or get_all_orders(info=None).
@@ -64,7 +64,10 @@ def get_order_info(orderID):
     :returns: Returns a list of dictionaries of key/value pairs for the order.
 
     """
-    url = urls.orders(orderID)
+    if option:
+        url = urls.option_orders(orderID)
+    else:
+        url = urls.orders(orderID)
     data = helper.request_get(url)
     return(data)
 
@@ -727,7 +730,7 @@ def order_option_spread(direction, price, symbol, quantity, spread, timeInForce=
 
 
 @helper.login_required
-def order_buy_option_limit(price, symbol, quantity, expirationDate, strike, optionType='both', timeInForce='gfd'):
+def order_buy_option_limit(price, symbol, quantity, expirationDate, strike, optionType='both', timeInForce='gfd',chain_id=None):
     """Submits a limit order for an option. i.e. place a long call or a long put.
 
     :param price: The limit price to trigger a buy of the option.
@@ -756,7 +759,10 @@ def order_buy_option_limit(price, symbol, quantity, expirationDate, strike, opti
         print(message)
         return None
 
-    optionID = helper.id_for_option(symbol, expirationDate, strike, optionType)
+    if chain_id is None:
+        optionID = helper.id_for_option(symbol, expirationDate, strike, optionType)
+    else:
+        optionID = chain_id
 
     payload = {
     'account': profiles.load_account_profile(info='url'),
@@ -780,7 +786,7 @@ def order_buy_option_limit(price, symbol, quantity, expirationDate, strike, opti
     return(data)
 
 @helper.login_required
-def order_sell_option_limit(price, symbol, quantity, expirationDate, strike, optionType='both', timeInForce='gfd'):
+def order_sell_option_limit(price, symbol, quantity, expirationDate, strike, optionType='both', timeInForce='gfd',chain_id=None):
     """Submits a limit order for an option. i.e. place a short call or a short put.
 
     :param price: The limit price to trigger a sell of the option.
@@ -809,7 +815,10 @@ def order_sell_option_limit(price, symbol, quantity, expirationDate, strike, opt
         print(message)
         return None
 
-    optionID = helper.id_for_option(symbol, expirationDate, strike, optionType)
+    if chain_id is None:
+        optionID = helper.id_for_option(symbol, expirationDate, strike, optionType)
+    else:
+        optionID = chain_id
 
     payload = {
     'account': profiles.load_account_profile(info='url'),
