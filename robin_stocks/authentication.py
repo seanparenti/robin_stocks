@@ -102,7 +102,11 @@ def login(username=None, password=None, expiresIn=86400, scope='internal', by_sm
         'scope': scope,
         'username': username,
         'challenge_type': challenge_type,
-        'device_token': device_token
+        'device_token': device_token,
+        'try_passkeys': False,
+        'token_request_path':'/login',
+        'create_read_only_secondary_token':True,
+        'request_id': '848bd19e-02bc-45d9-99b5-01bce5a79ea7'
     }
 
     if mfa_code:
@@ -110,9 +114,11 @@ def login(username=None, password=None, expiresIn=86400, scope='internal', by_sm
 
     # If authentication has been stored in pickle file then load it. Stops login server from being pinged so much.
     if os.path.isfile(pickle_path):
+        print('level 1')
         # If store_session has been set to false then delete the pickle file, otherwise try to load it.
         # Loading pickle file will fail if the acess_token has expired.
         if store_session:
+            print('level 2')
             try:
                 with open(pickle_path, 'rb') as f:
                     pickle_data = pickle.load(f)
@@ -152,7 +158,9 @@ def login(username=None, password=None, expiresIn=86400, scope='internal', by_sm
         payload['password'] = password
 
     data = request_post(url, payload)
+    print(data)
     # Handle case where mfa or challenge is required.
+
     if data:
         if 'mfa_required' in data:
             mfa_token = input("Please type in the MFA code: ")
@@ -165,6 +173,7 @@ def login(username=None, password=None, expiresIn=86400, scope='internal', by_sm
                 res = request_post(url, payload, jsonify_data=False)
             data = res.json()
         elif 'challenge' in data:
+            print('challenge requested')
             challenge_id = data['challenge']['id']
             sms_code = input('Enter Robinhood code for validation: ')
             res = respond_to_challenge(challenge_id, sms_code)
@@ -174,6 +183,10 @@ def login(username=None, password=None, expiresIn=86400, scope='internal', by_sm
                 res = respond_to_challenge(challenge_id, sms_code)
             update_session(
                 'X-ROBINHOOD-CHALLENGE-RESPONSE-ID', challenge_id)
+            data = request_post(url, payload)
+        elif 'verification_workflow' in data:
+            workflow_id = data['verification_workflow']['id']
+            _validate_sherrif_id(device_token=device_token, workflow_id=workflow_id, mfa_code=mfa_code)
             data = request_post(url, payload)
         # Update Session data with authorization or raise exception with the information present in data.
         if 'access_token' in data:
@@ -188,10 +201,53 @@ def login(username=None, password=None, expiresIn=86400, scope='internal', by_sm
                                  'refresh_token': data['refresh_token'],
                                  'device_token': payload['device_token']}, f)
         else:
-            raise Exception(data['detail'])
+            if 'detail' in data:
+                raise Exception(data['detail'])
+            raise Exception(f"Received an error response {data}")
     else:
         raise Exception('Error: Trouble connecting to robinhood API. Check internet connection.')
     return(data)
+
+
+def _validate_sherrif_id(device_token:str, workflow_id:str,mfa_code:str):
+    url = "https://api.robinhood.com/pathfinder/user_machine/"
+    payload = {
+        'device_id': device_token,
+        'flow': 'suv',
+        'input':{'workflow_id': workflow_id}
+    }
+    data = request_post(url=url, payload=payload,json=True)
+    print(data)
+    if "id" in data:
+        inquiries_url = f"https://api.robinhood.com/pathfinder/inquiries/{data['id']}/user_view/"
+        res = request_get(inquiries_url)
+        challenge_id=res['type_context']["context"]["sheriff_challenge"]["id"]
+        challenge_url = f"https://api.robinhood.com/challenge/{challenge_id}/respond/"
+        
+        print('challenge requested')
+        sms_code = input('Enter Robinhood code for validation: ')
+        
+        challenge_payload = {
+            'response': sms_code
+        }
+        challenge_response = request_post(url=challenge_url, payload=challenge_payload,json=True )
+        print(challenge_response)
+        if challenge_response["status"] == "validated":
+            inquiries_payload = {"sequence":0,"user_input":{"status":"continue"}}
+            inquiries_response = request_post(url=inquiries_url, payload=inquiries_payload,json=True )
+            if inquiries_response["type_context"]["result"] == "workflow_status_approved":
+                return
+            else:
+                raise Exception("workflow status  not approved")    
+        else:
+            raise Exception("Challenge not validated")
+    raise Exception("Id not returned in user-machine call")
+
+def _get_sherrif_challenge(token_id:str):
+    if "id" in data:
+        return data["id"]
+    raise Exception("Id not returned in user-machine call")
+
 
 
 @login_required
